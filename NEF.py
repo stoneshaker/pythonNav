@@ -2,6 +2,7 @@ import numpy as np
 import math
 import EarthModel
 import RotationConversion
+import quaternion
 #include "NEF.h"
 #include "CommonDefines.h"
 #include "RotationConversion.h"
@@ -18,6 +19,16 @@ QBOOST_RATE_THRESHOLD        = (10*DEG2RAD)
 ATTITUDE_Q_BOOST_FACTOR      = 50.0
 ATTITUDE_Q_BOOST_UPPER_LIMIT = 1000.0
 
+GeodeticPositionInit =  {
+    'GEODETIC_POSITION_LATITUDE': 0.0,
+    'GEODETIC_POSITION_LONGITUDE': 0.0,
+    'GEODETIC_POSITION_HEIGHT': 0.0
+    }
+NavFrameVelocityInit = {
+  'NAV_FRAME_NORTH':0.0,
+  'NAV_FRAME_EAST':0.0,
+  'NAV_FRAME_DOWN':0.0
+  }
 
 #float NorthVelQBoost
 #float EastVelQBoost
@@ -29,125 +40,127 @@ ATTITUDE_Q_BOOST_UPPER_LIMIT = 1000.0
 
 # Inertial input interface
 class NEFInertialInputData:
+    def __init__(self):
    # True or False indicates the validity of this inertial data.
-   self.DataValid = False
+        self.DataValid = False
 
    # Units - seconds, this time represents the end of
    # the IMU measurement period.
-   self.TimeOfValidity = 0.0
+        self.TimeOfValidity = 0.0
 
    # Units - seconds, this time represents the duration
    # of the IMU measurement period. The rates and
    # accelerations that are measured are assumed to be
    # the average rates and accelerations over this period.
    #short_float TimeDelta
-   self.TimeDelta = 0.0
+        self.TimeDelta = 0.0
 
    # Body Frame Vector,
    #   BODY_FRAME_X = radians per second
    #   BODY_FRAME_Y = radians per second
    #   BODY_FRAME_Z = radians per second
-   self.BodyAngularRates = {
-     'BODY_FRAME_X':0,
-     'BODY_FRAME_Y':0,
-     'BODY_FRAME_Z':0
-     }
-
+        self.BodyAngularRates = {
+          'BODY_FRAME_X':0,
+          'BODY_FRAME_Y':0,
+          'BODY_FRAME_Z':0
+          }
+ 
    # Body Frame Vector,
    #   BODY_FRAME_X = metres per second squared
    #   BODY_FRAME_Y = metres per second squared
    #   BODY_FRAME_Z = metres per second squared
-   self.BodyAccelerations = {
-     'BODY_FRAME_X':0,
-     'BODY_FRAME_Y':0,
-     'BODY_FRAME_Z':0
-     }
+        self.BodyAccelerations = {
+          'BODY_FRAME_X':0,
+          'BODY_FRAME_Y':0,
+          'BODY_FRAME_Z':0
+          }
    
 # Output interface
 class NEFOutput:
+    def __init__(self):
    # units - seconds
-   self.TimeOfValidity = 0.0
+        self.TimeOfValidity = 0.0
 
    # units - trig ratio (-1..1)
-   self.CosLatitude = 1.0
+        self.CosLatitude = 1.0
 
    # units - trig ratio (-1..1)
-   self.SinLatitude = 0.0
+        self.SinLatitude = 0.0
 
    # Geodetic Position Vector,
    #   GEODETIC_POSITION_LATITUDE  = radians,
    #   GEODETIC_POSITION_LONGITUDE = radians,
    #   GEODETIC_POSITION_HEIGHT    = metres
-   self.GeodeticPosition = {
-     'GEODETIC_POSITION_LATITUDE':0.0,
-     'GEODETIC_POSITION_LONGITUDE':0.0,
-     'GEODETIC_POSITION_HEIGHT':0.0
-     }
+        self.GeodeticPosition = {
+          'GEODETIC_POSITION_LATITUDE':0.0,
+          'GEODETIC_POSITION_LONGITUDE':0.0,
+          'GEODETIC_POSITION_HEIGHT':0.0
+          }
 
    # Nav Frame Vector,
    #   NAV_FRAME_NORTH = metres per second
    #   NAV_FRAME_EAST  = metres per second
    #   NAV_FRAME_DOWN  = metres per second
-   self.NavFrameVelocity = {
-     'NAV_FRAME_NORTH':0.0,
-     'NAV_FRAME_EAST':0.0,
-     'NAV_FRAME_DOWN':0.0
-     }
+        self.NavFrameVelocity = {
+          'NAV_FRAME_NORTH':0.0,
+          'NAV_FRAME_EAST':0.0,
+          'NAV_FRAME_DOWN':0.0
+          }
 
    # Nav Frame Euler Vector,
    #   NAV_FRAME_EULER_ROLL    = radians
    #   NAV_FRAME_EULER_PITCH   = radians
    #   NAV_FRAME_EULER_HEADING = radians
-   self.EulerAngleAttitude = {
-     'NAV_FRAME_EULER_ROLL':0.0,
-     'NAV_FRAME_EULER_PITCH':0.0,
-     'NAV_FRAME_EULER_HEADING':0.0
-     }
+        self.EulerAngleAttitude = {
+          'NAV_FRAME_EULER_ROLL':0.0,
+          'NAV_FRAME_EULER_PITCH':0.0,
+          'NAV_FRAME_EULER_HEADING':0.0
+          }
 
    # Direction Cosine Matrix
-   self.BodyToNavFrameDCM = np.identity(3)
+        self.BodyToNavFrameDCM = np.identity(3)
 
    # Body Frame Vector,
    #   BODY_FRAME_X = radians per second
    #   BODY_FRAME_Y = radians per second
    #   BODY_FRAME_Z = radians per second
-   self.RawAngularRates = {
-     'BODY_FRAME_X':0.0,
-     'BODY_FRAME_Y':0.0,
-     'BODY_FRAME_Z':0.0
-     }
+        self.RawAngularRates = {
+          'BODY_FRAME_X':0.0,
+          'BODY_FRAME_Y':0.0,
+          'BODY_FRAME_Z':0.0
+          }
 
    # Body Frame Vector,
    #   BODY_FRAME_X = radians per second
    #   BODY_FRAME_Y = radians per second
    #   BODY_FRAME_Z = radians per second
-   self.CorrectedAngularRates = {
-     'BODY_FRAME_X':0.0,
-     'BODY_FRAME_Y':0.0,
-     'BODY_FRAME_Z':0.0
-     }
+        self.CorrectedAngularRates = {
+          'BODY_FRAME_X':0.0,
+          'BODY_FRAME_Y':0.0,
+          'BODY_FRAME_Z':0.0
+          }
 
    # Body Frame Vector,
    #   BODY_FRAME_X = metres per second squared
    #   BODY_FRAME_Y = metres per second squared
    #   BODY_FRAME_Z = metres per second squared
-   self.RawAccelerometerReadings = {
-     'BODY_FRAME_X':0.0,
-     'BODY_FRAME_Y':0.0,
-     'BODY_FRAME_Z':0.0
-     }
+        self.RawAccelerometerReadings = {
+          'BODY_FRAME_X':0.0,
+          'BODY_FRAME_Y':0.0,
+          'BODY_FRAME_Z':0.0
+          }
 
    # Nav Frame Vector,
    #   NAV_FRAME_NORTH = metres per second squared
    #   NAV_FRAME_EAST  = metres per second squared
    #   NAV_FRAME_DOWN  = metres per second squared
-   self.CorrectedNavFrameAccelerations = {
-     'NAV_FRAME_NORTH':0.0,
-     'NAV_FRAME_EAST':0.0,
-     'NAV_FRAME_DOWN':0.0
-     }
+        self.CorrectedNavFrameAccelerations = {
+          'NAV_FRAME_NORTH':0.0,
+          'NAV_FRAME_EAST':0.0,
+          'NAV_FRAME_DOWN':0.0
+          }
 
-   self.EarthModel = EarthModel()
+        self.EarthModel = EarthModel.EarthModel()
    
 class NEFStateData:
   def __init__(self):
@@ -155,7 +168,7 @@ class NEFStateData:
    # The output data should be copied before being used by
    # processes other than the NEF.
     self.Output = NEFOutput()
-    self.BodyToNavQuaternionAttitude = np.quaternion(1,0,0,0)
+    self.BodyToNavQuaternionAttitude = quaternion.Quaternion_RotationIdentity()
     self.NavToBodyFrameDCM = np.identity(3)
     self.GeodeticPosition = GeodeticPositionInit
     self.TransportRate = [0] * 3
@@ -165,7 +178,7 @@ class NEFStateData:
     self.CosLatitude = 1.0
     self.SinLatitude = 0.0
     self.NavFrameVelocity = NavFrameVelocityInit
-    self.EarthModel = pEarthModel
+    self.EarthModel = EarthModel.EarthModel()
     self.LastValidInertialInput = NEFInertialInputData()
     self.AccelerationLimit = 0.0
     self.AngularRateLimit = 0.0
@@ -175,16 +188,15 @@ class NEFStateData:
 #---------------------
 
   def PositionComputation_Initialize(self, pPosition):
-
    # Initialize the vector position
-   self.Output.GeodeticPosition['GEODETIC_POSITION_LATITUDE'] = pPosition['GEODETIC_POSITION_LATITUDE']
+        self.Output.GeodeticPosition['GEODETIC_POSITION_LATITUDE'] = pPosition['GEODETIC_POSITION_LATITUDE']
 
-   self.Output.GeodeticPosition['GEODETIC_POSITION_LONGITUDE'] = pPosition['GEODETIC_POSITION_LONGITUDE']
+        self.Output.GeodeticPosition['GEODETIC_POSITION_LONGITUDE'] = pPosition['GEODETIC_POSITION_LONGITUDE']
 
-   self.Output.GeodeticPosition['GEODETIC_POSITION_HEIGHT'] = pPosition['GEODETIC_POSITION_HEIGHT']
+        self.Output.GeodeticPosition['GEODETIC_POSITION_HEIGHT'] = pPosition['GEODETIC_POSITION_HEIGHT']
 
-   self.Output.CosLatitude = np.cos(pPosition['GEODETIC_POSITION_LATITUDE'])
-   self.Output.SinLatitude = np.sin(pPosition['GEODETIC_POSITION_LATITUDE'])
+        self.Output.CosLatitude = np.cos(pPosition['GEODETIC_POSITION_LATITUDE'])
+        self.Output.SinLatitude = np.sin(pPosition['GEODETIC_POSITION_LATITUDE'])
 
 
   def PositionComputation_Run(self, pInertialInput):
@@ -282,8 +294,7 @@ class NEFStateData:
     VelocityProcessing_FrameRateComputation(pStateData)
 
 
-  def VelocityProcessing_VelocityComputation(
-                  self, pInertialInput, pCorrections):
+  def VelocityProcessing_VelocityComputation(self, pInertialInput, pCorrections):
    #struct s3dVector GravitationalAcceleration
    #struct s3dVector NavFrameCoriolisAcceleration
    #struct s3dVector CorrectedBodyFrameAcceleration
@@ -424,19 +435,15 @@ class NEFStateData:
    self.Output.RawAccelerometerReadings = pInertialInput.BodyAccelerations
 
 
-  def VelocityProcessing_Run(
-                  self,
-                  const struct sNEFInertialInputData* pInertialInput,
-                  const struct sNEFContinuousCorrections* pCorrections)
+  def VelocityProcessing_Run(self, pInertialInput, pCorrections):
 
-   VelocityProcessing_VelocityComputation(
-                                    pStateData,
+   VelocityProcessing_VelocityComputation(pStateData,
                                     pInertialInput,
                                     pCorrections)
    VelocityProcessing_FrameRateComputation(pStateData)
 
 
-  def VelocityProcessing_AddCorrections(self, pCorrections)
+  def VelocityProcessing_AddCorrections(self, pCorrections):
 
    # Add the Geographic Velocity correction from the Navigation Filter.
    if (pCorrections.bOneOffCorrectionsValid):
@@ -456,13 +463,11 @@ class NEFStateData:
 
    # Update the Direction Cosine Matrices.
     self.Output.BodyToNavFrameDCM = FormDCMFromQuaternion(self.BodyToNavQuaternionAttitude)
-               )
 
     self.NavToBodyFrameDCM = np.transpose(self.Output.BodyToNavFrameDCM)
 
    # Update the Euler Angles
     self.Output.EulerAngleAttitude = ExtractEulerAnglesFromDCM(self.Output.BodyToNavFrameDCM)
-}
 
   def Strapdown_Initialize(self, pAttitude):
     FormQuaternionFromEulerAngles(
@@ -496,19 +501,19 @@ class NEFStateData:
    #/* it doesn't work properly!                                     */
    #/*****************************************************************/
    
-   XRateAbs = GyroRate['BODY_FRAME_X']
+    XRateAbs = GyroRate['BODY_FRAME_X']
 
-   if(XRateAbs < 0):
+    if(XRateAbs < 0):
       XRateAbs = -XRateAbs
 
-   YRateAbs = GyroRate['BODY_FRAME_Y']
+    YRateAbs = GyroRate['BODY_FRAME_Y']
 
-   if(YRateAbs < 0):
+    if(YRateAbs < 0):
       YRateAbs = -YRateAbs
 
-   ZRateAbs = GyroRate['BODY_FRAME_Z']
+    ZRateAbs = GyroRate['BODY_FRAME_Z']
 
-   if(ZRateAbs < 0):
+    if(ZRateAbs < 0):
       ZRateAbs = -ZRateAbs
 
    #/*------------------------------------------------------------*/
@@ -519,7 +524,7 @@ class NEFStateData:
    #/**************************************************************/
 
    # X axis
-   if (XRateAbs > QBOOST_RATE_THRESHOLD):
+    if (XRateAbs > QBOOST_RATE_THRESHOLD):
       BodyX_AttitudeQ_Boost = (XRateAbs/QBOOST_RATE_THRESHOLD)*ATTITUDE_Q_BOOST_FACTOR
       
       #BodyX_AttitudeQ_Boost = 1.0  uncomment to turn Q boost off
@@ -527,11 +532,11 @@ class NEFStateData:
       if(BodyX_AttitudeQ_Boost > ATTITUDE_Q_BOOST_UPPER_LIMIT):
          BodyX_AttitudeQ_Boost = ATTITUDE_Q_BOOST_UPPER_LIMIT
 
-   else:
+    else:
       BodyX_AttitudeQ_Boost = 1.0
 
    # Y axis
-   if (YRateAbs > QBOOST_RATE_THRESHOLD):
+    if (YRateAbs > QBOOST_RATE_THRESHOLD):
    
       BodyY_AttitudeQ_Boost = (YRateAbs/QBOOST_RATE_THRESHOLD)*ATTITUDE_Q_BOOST_FACTOR
       
@@ -543,13 +548,13 @@ class NEFStateData:
       
    
 
-   else:
+    else:
    
       BodyY_AttitudeQ_Boost = 1.0
    
 
    # Z axis
-   if (ZRateAbs > QBOOST_RATE_THRESHOLD):
+    if (ZRateAbs > QBOOST_RATE_THRESHOLD):
    
       BodyZ_AttitudeQ_Boost = (ZRateAbs/QBOOST_RATE_THRESHOLD)*ATTITUDE_Q_BOOST_FACTOR
       
@@ -561,48 +566,47 @@ class NEFStateData:
       
    
 
-   else:
+    else:
       BodyZ_AttitudeQ_Boost = 1.0
 
 
    # Subtract the frame rate adjustment.
-   GyroRate = GyroRate - self.BodyFrameRate
+    GyroRate = GyroRate - self.BodyFrameRate
 
    # Write the corrected rate to the output data.
-   self.Output.CorrectedAngularRates = GyroRate
+    self.Output.CorrectedAngularRates = GyroRate
 
    # Turn corrected rates into increments.
-   CorrectedGyroIncrements = GyroRate * pInertialInput.TimeDelta
+    CorrectedGyroIncrements = GyroRate * pInertialInput.TimeDelta
 
    # Integrate the quaternion for Body to Nav Frame conversion
-   FormQuaternionUpdate(
+    FormQuaternionUpdate(
                CorrectedGyroIncrements,
                QuaternionUpdate)
 
-   Quaternion_Multiply(
+    Quaternion_Multiply(
                self.BodyToNavQuaternionAttitude,
                QuaternionUpdate,
                NewAttitudeQuaternion)
 
-   self.BodyToNavQuaternionAttitude = NewAttitudeQuaternion
+    self.BodyToNavQuaternionAttitude = NewAttitudeQuaternion
 
    # Update the Attitude members to reflect new attitude
-   Strapdown_AttitudeChange(pStateData)
-}
+    Strapdown_AttitudeChange(pStateData)
 
-  def Strapdown_AddCorrections(self, pCorrections)
+  def Strapdown_AddCorrections(self, pCorrections):
    #struct sQuaternion NavFrameMisalignmentQuaternionUpdate
    #struct sQuaternion NewAttitudeQuaternion
    #struct s3dVector NavFrameMisalignmentCorrection
 
    
-   NavFrameMisalignmentCorrection = pCorrections.NavFrameMisalignmentCorrection
+    NavFrameMisalignmentCorrection = pCorrections.NavFrameMisalignmentCorrection
 
-   NavFrameMisalignmentCorrection = NavFrameMisalignmentCorrection * -1.0
+    NavFrameMisalignmentCorrection = NavFrameMisalignmentCorrection * -1.0
  
    # Apply geographic misalignment corrections from Navigation Filter
    # if they are valid.
-   if (pCorrections.bOneOffCorrectionsValid):
+    if (pCorrections.bOneOffCorrectionsValid):
       FormQuaternionUpdate(
                   NavFrameMisalignmentCorrection,
                   NavFrameMisalignmentQuaternionUpdate)
@@ -626,18 +630,15 @@ class NEFStateData:
 # Copy Routines
 #--------------
 
-def sNEFOutput_Copy(
-            const struct sNEFOutput* pSource,
-            struct sNEFOutput* pDestination)
-{
+def sNEFOutput_Copy(pSource):
+   
    pDestination = pSource
-}
+   return pDestination
 
-def sNEFContinuousCorrections_Copy(
-            const struct sNEFContinuousCorrections* pSource,
-            struct sNEFContinuousCorrections* pDestination)
+def sNEFContinuousCorrections_Copy(pSource):
 
    pDestination = pSource
+   return pDestination
 
 #------------------------------
 # Public Functions - Operations
@@ -645,7 +646,7 @@ def sNEFContinuousCorrections_Copy(
 #------------------------------
 
 def NEF_Constructor(self):
-    EarthModel_SetParametersToWGS84(&self.Output.EarthModel)
+    EarthModel_SetParametersToWGS84(self.Output.EarthModel)
 
     # Set limits on inertial data.
     self.AccelerationLimit = 100.0 # default to 10g
@@ -655,35 +656,26 @@ def NEF_Constructor(self):
 #---------------------------------------------------------------------------------------------
 
 def NEF_EarthModelSetParameters(self):
-    EarthModel_SetParametersToWGS84(
-                  self.Output.EarthModel)
+    EarthModel_SetParametersToWGS84(self.Output.EarthModel)
 
 #---------------------------------------------------------------------------------------------
 
 def NEF_Initialize(self, pInitializationData):
-   PositionComputation_Initialize(
-                  self,
-                  pInitializationData.Position)
+   PositionComputation_Initialize(self,pInitializationData.Position)
 
-   EarthModel_CalculateGravityAndEarthRadii(
-                  self.Output.EarthModel,
+   EarthModel_CalculateGravityAndEarthRadii(self.Output.EarthModel,
                   self.Output.GeodeticPosition,
                   self.Output.SinLatitude)
 
-   Strapdown_Initialize(
-                  self,
-                  &pInitializationData.Attitude)
+   Strapdown_Initialize(self,pInitializationData.Attitude)
 
-   VelocityProcessing_Initialize(
-                  self,
-                  pInitializationData.Velocity)
+   VelocityProcessing_Initialize(self,pInitializationData.Velocity)
 
    self.Output.TimeOfValidity = pInitializationData.TimeOfValidity
 
    # Initialize the last valid inertial input
    self.LastInertialInputValid = False
-   self.LastValidInertialInput.TimeOfValidity =
-                           pInitializationData.TimeOfValidity
+   self.LastValidInertialInput.TimeOfValidity = pInitializationData.TimeOfValidity
 
 #---------------------------------------------------------------------------------------------
 
@@ -694,12 +686,12 @@ def NEF_SetInertialLimits(self):
 
 #---------------------------------------------------------------------------------------------
 
-def NEF_NavigationUpdate(self, pInertialInput, pCorrections)
+def NEF_NavigationUpdate(self, pInertialInput, pCorrections):
 
     Spike = False
 
 
-   EarthModel_CalculateGravityAndEarthRadii(
+    EarthModel_CalculateGravityAndEarthRadii(
                   self.Output.EarthModel,
                   self.Output.GeodeticPosition,
                   self.Output.SinLatitude)
@@ -707,70 +699,67 @@ def NEF_NavigationUpdate(self, pInertialInput, pCorrections)
    # Check the validity of the inertial input...
 
    # Do the spike check
-   for (i = 0 i < 3 i++):
-      if ((sf_abs(pInertialInput.BodyAccelerations[i]) >
-                                       self.AccelerationLimit) ||
-          (sf_abs(pInertialInput.BodyAngularRates[i]) >
+    for i in range(3):
+        if ((math.abs(pInertialInput.BodyAccelerations[i]) > \
+                                       self.AccelerationLimit) or
+           (math.abs(pInertialInput.BodyAngularRates[i]) > \
                                        self.AngularRateLimit)):
-          Spike = True
+            Spike = True
 
    # Only update the inertial data if it is valid
-   if ((Spike == False) && (pInertialInput.DataValid == True)):
-      s3dVector_Copy(pInertialInput.BodyAccelerations,
+    if ((Spike == False) and (pInertialInput.DataValid == True)):
+        s3dVector_Copy(pInertialInput.BodyAccelerations,
                self.LastValidInertialInput.BodyAccelerations)
 
-      s3dVector_Copy(
+        s3dVector_Copy(
                pInertialInput.BodyAngularRates,
                self.LastValidInertialInput.BodyAngularRates)
 
-      self.LastInertialInputValid = True
+        self.LastInertialInputValid = True
 
-   self.LastValidInertialInput.TimeDelta = 
-      (pInertialInput.TimeOfValidity -
+    self.LastValidInertialInput.TimeDelta = \
+        (pInertialInput.TimeOfValidity - \
                   self.LastValidInertialInput.TimeOfValidity)
 
-   self.LastValidInertialInput.TimeOfValidity =
+    self.LastValidInertialInput.TimeOfValidity = \
                                  pInertialInput.TimeOfValidity
 
-   if (self.LastInertialInputValid == True):
-      Strapdown_Run(
-               pStateData,
-               &self.LastValidInertialInput,
+    if (self.LastInertialInputValid == True):
+        Strapdown_Run(pStateData,
+               self.LastValidInertialInput,
                pCorrections)
 
-      VelocityProcessing_Run(
-               pStateData,
-               &self.LastValidInertialInput,
+        VelocityProcessing_Run(pStateData,
+               self.LastValidInertialInput,
                pCorrections)
 
-      PositionComputation_Run(
-               pStateData,
-               &self.LastValidInertialInput)
+        PositionComputation_Run(pStateData,
+               self.LastValidInertialInput)
 
-      self.Output.TimeOfValidity = pInertialInput.TimeOfValidity
-}
+        self.Output.TimeOfValidity = pInertialInput.TimeOfValidity
 
 #---------------------------------------------------------------------------------------------
 
 def NEF_AddCorrections(self, pCorrections):
 
-   PositionComputation_AddCorrections(self, pCorrections)
+    PositionComputation_AddCorrections(self, pCorrections)
 
-   EarthModel_CalculateGravityAndEarthRadii(
+    EarthModel_CalculateGravityAndEarthRadii(
                self.Output.EarthModel,
                self.Output.GeodeticPosition,
                self.Output.SinLatitude)
 
-   Strapdown_AddCorrections(self, pCorrections)
+    Strapdown_AddCorrections(self, pCorrections)
 
-   VelocityProcessing_AddCorrections(self, pCorrections)
+    VelocityProcessing_AddCorrections(self, pCorrections)
 
 
 #---------------------------------------------------------------------------------------------
 
-def NEF_GetOutput(self, pOutput)
+def NEF_GetOutput(self):
 
-   sNEFOutput_Copy(self.Output, pOutput)
+    pOutput = sNEFOutput_Copy(self.Output)
+    return pOutput
 
 
 #---------------------------------------------------------------------------------------------
