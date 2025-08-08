@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/pythonNav/FileContentIndex
+/.vs/pythonNav/v17/.wsuo
+/.vs/pythonNav/v17/DocumentLayout.backup.json
+/.vs/pythonNav/v17/DocumentLayout.json
+/.vs/ProjectSettings.json
+/.vs
+/__pycache__
